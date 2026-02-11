@@ -4,10 +4,13 @@ import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import GameHUD from '@/components/3d/GameHUD'
 
-// 动态导入 3D 场景（禁用 SSR）
+// 动态导入（禁用 SSR）
 const GameScene = dynamic(() => import('@/components/3d/GameScene'), {
   ssr: false,
   loading: () => <LoadingScreen />,
+})
+const TouchControls = dynamic(() => import('@/components/3d/TouchControls'), {
+  ssr: false,
 })
 
 function LoadingScreen() {
@@ -66,26 +69,52 @@ function LoadingScreen() {
   )
 }
 
-export default function LobbyPage() {
-  const [isReady, setIsReady] = useState(false)
+function useIsTouchDevice() {
+  const [isTouch, setIsTouch] = useState(false)
 
   useEffect(() => {
-    // 短暂延迟确保 loading 界面显示
-    const timer = setTimeout(() => setIsReady(true), 500)
-    return () => clearTimeout(timer)
+    const check = () => {
+      setIsTouch(
+        'ontouchstart' in window ||
+        navigator.maxTouchPoints > 0 ||
+        window.matchMedia('(pointer: coarse)').matches
+      )
+    }
+    check()
+    // 后备：监听首次触摸事件
+    const onFirstTouch = () => {
+      setIsTouch(true)
+      window.removeEventListener('touchstart', onFirstTouch)
+    }
+    window.addEventListener('touchstart', onFirstTouch, { once: true })
+    return () => window.removeEventListener('touchstart', onFirstTouch)
   }, [])
+
+  return isTouch
+}
+
+export default function LobbyPage() {
+  const isTouchDevice = useIsTouchDevice()
 
   const handleBack = () => {
     window.location.href = '/dashboard'
   }
 
   return (
-    <div className="w-full h-screen overflow-hidden bg-black relative">
+    <div className="w-full h-screen overflow-hidden bg-black relative touch-none">
       {/* 3D 场景 */}
       <GameScene playerColor="#E74C3C" />
 
       {/* HUD 覆盖层 */}
-      <GameHUD tokenBalance={1000} nickname="玩家" onBack={handleBack} />
+      <GameHUD
+        tokenBalance={1000}
+        nickname="玩家"
+        isTouchDevice={isTouchDevice}
+        onBack={handleBack}
+      />
+
+      {/* 触屏控制（仅移动端显示） */}
+      {isTouchDevice && <TouchControls />}
     </div>
   )
 }

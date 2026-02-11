@@ -5,6 +5,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { RigidBody, CapsuleCollider, type RapierRigidBody } from '@react-three/rapier'
 import * as THREE from 'three'
 import LegoCharacter from './LegoCharacter'
+import { getInput, setKeyDown, setKeyUp } from './inputStore'
 
 const MOVE_SPEED = 5
 const JUMP_FORCE = 5
@@ -26,76 +27,25 @@ export default function PlayerController({
   const characterRef = useRef<THREE.Group>(null)
   const { camera } = useThree()
 
-  const [keys, setKeys] = useState({
-    forward: false,
-    backward: false,
-    left: false,
-    right: false,
-    jump: false,
-  })
-
   const [isMoving, setIsMoving] = useState(false)
   const [isJumping, setIsJumping] = useState(false)
-  const [isGrounded, setIsGrounded] = useState(true)
 
-  // 键盘输入
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    switch (e.code) {
-      case 'KeyW':
-      case 'ArrowUp':
-        setKeys((k) => ({ ...k, forward: true }))
-        break
-      case 'KeyS':
-      case 'ArrowDown':
-        setKeys((k) => ({ ...k, backward: true }))
-        break
-      case 'KeyA':
-      case 'ArrowLeft':
-        setKeys((k) => ({ ...k, left: true }))
-        break
-      case 'KeyD':
-      case 'ArrowRight':
-        setKeys((k) => ({ ...k, right: true }))
-        break
-      case 'Space':
-        e.preventDefault()
-        setKeys((k) => ({ ...k, jump: true }))
-        break
-    }
-  }, [])
-
-  const handleKeyUp = useCallback((e: KeyboardEvent) => {
-    switch (e.code) {
-      case 'KeyW':
-      case 'ArrowUp':
-        setKeys((k) => ({ ...k, forward: false }))
-        break
-      case 'KeyS':
-      case 'ArrowDown':
-        setKeys((k) => ({ ...k, backward: false }))
-        break
-      case 'KeyA':
-      case 'ArrowLeft':
-        setKeys((k) => ({ ...k, left: false }))
-        break
-      case 'KeyD':
-      case 'ArrowRight':
-        setKeys((k) => ({ ...k, right: false }))
-        break
-      case 'Space':
-        setKeys((k) => ({ ...k, jump: false }))
-        break
-    }
-  }, [])
-
+  // 键盘输入 → 写入 inputStore
   useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown)
-    window.addEventListener('keyup', handleKeyUp)
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown)
-      window.removeEventListener('keyup', handleKeyUp)
+    const onDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space') e.preventDefault()
+      setKeyDown(e.code)
     }
-  }, [handleKeyDown, handleKeyUp])
+    const onUp = (e: KeyboardEvent) => {
+      setKeyUp(e.code)
+    }
+    window.addEventListener('keydown', onDown)
+    window.addEventListener('keyup', onUp)
+    return () => {
+      window.removeEventListener('keydown', onDown)
+      window.removeEventListener('keyup', onUp)
+    }
+  }, [])
 
   // 获取相机前方方向（忽略 Y 轴）
   const getCameraForward = useCallback(() => {
@@ -119,23 +69,26 @@ export default function PlayerController({
     const body = rigidBodyRef.current
     const position = body.translation()
     const velocity = body.linvel()
+    const input = getInput()
 
     // 检测是否在地面
     const grounded = Math.abs(velocity.y) < 0.1
-    setIsGrounded(grounded)
     if (grounded) setIsJumping(false)
 
-    // 计算移动方向
+    // 计算移动方向（从 inputStore 读取归一化数值）
     const moveDirection = new THREE.Vector3(0, 0, 0)
     const forward = getCameraForward()
     const right = getCameraRight()
 
-    if (keys.forward) moveDirection.add(forward)
-    if (keys.backward) moveDirection.sub(forward)
-    if (keys.left) moveDirection.sub(right)
-    if (keys.right) moveDirection.add(right)
+    // moveZ: +1=前, -1=后; moveX: +1=右, -1=左
+    if (input.moveZ !== 0) {
+      moveDirection.addScaledVector(forward, input.moveZ)
+    }
+    if (input.moveX !== 0) {
+      moveDirection.addScaledVector(right, input.moveX)
+    }
 
-    const moving = moveDirection.length() > 0
+    const moving = moveDirection.length() > 0.05
     setIsMoving(moving)
 
     if (moving) {
@@ -144,18 +97,22 @@ export default function PlayerController({
       // 边界限制
       const nextX = position.x + moveDirection.x * 0.1
       const nextZ = position.z + moveDirection.z * 0.1
-
       let clampedX = moveDirection.x
       let clampedZ = moveDirection.z
-
       if (Math.abs(nextX) > WORLD_BOUNDARY) clampedX = 0
       if (Math.abs(nextZ) > WORLD_BOUNDARY) clampedZ = 0
 
+      // 根据摇杆幅度调整速度（模拟量输入）
+      const magnitude = Math.min(
+        Math.sqrt(input.moveX * input.moveX + input.moveZ * input.moveZ),
+        1
+      )
+
       body.setLinvel(
         {
-          x: clampedX * MOVE_SPEED,
+          x: clampedX * MOVE_SPEED * magnitude,
           y: velocity.y,
-          z: clampedZ * MOVE_SPEED,
+          z: clampedZ * MOVE_SPEED * magnitude,
         },
         true
       )
@@ -166,12 +123,11 @@ export default function PlayerController({
         characterRef.current.rotation.y = angle
       }
     } else {
-      // 停止水平移动
       body.setLinvel({ x: 0, y: velocity.y, z: 0 }, true)
     }
 
     // 跳跃
-    if (keys.jump && grounded && !isJumping) {
+    if (input.jump && grounded && !isJumping) {
       body.setLinvel({ x: velocity.x, y: JUMP_FORCE, z: velocity.z }, true)
       setIsJumping(true)
     }
@@ -188,7 +144,6 @@ export default function PlayerController({
       position.y + CAMERA_HEIGHT,
       position.z - forward.z * CAMERA_DISTANCE
     )
-
     camera.position.lerp(targetCameraPos, CAMERA_LERP)
     camera.lookAt(position.x, position.y + 1.5, position.z)
   })
