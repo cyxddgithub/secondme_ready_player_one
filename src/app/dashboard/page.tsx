@@ -53,6 +53,24 @@ export default async function DashboardPage() {
 
           {/* 右侧 - 游戏世界入口 */}
           <div className="lg:col-span-2 space-y-6">
+            {/* 进入 3D 世界 */}
+            <a
+              href="/lobby"
+              className="block bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl shadow-lg p-6 text-white hover:shadow-xl transition-all hover:scale-[1.02] group"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-xl mb-1">进入世界大厅</h3>
+                  <p className="text-white/80 text-sm">
+                    3D 沙盒世界 - 自由探索、竞技、交易
+                  </p>
+                </div>
+                <div className="text-4xl group-hover:translate-x-1 transition-transform">
+                  &#9654;
+                </div>
+              </div>
+            </a>
+
             {/* Token 状态 */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <div className="flex items-center justify-between mb-4">
