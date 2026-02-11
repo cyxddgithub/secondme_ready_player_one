@@ -14,7 +14,10 @@ const TOKEN_ENDPOINT = process.env.SECONDME_TOKEN_ENDPOINT || `${API_BASE_URL}/a
 
 /**
  * 自动推断应用 base URL（用于构建 redirect_uri）
- * 优先级: SECONDME_REDIRECT_URI > NEXTAUTH_URL > VERCEL_URL > localhost
+ * 优先级: SECONDME_REDIRECT_URI > NEXTAUTH_URL > VERCEL_PROJECT_PRODUCTION_URL > VERCEL_URL > localhost
+ *
+ * 注意: VERCEL_URL 是部署专属 URL（每次部署不同），不适合用作 OAuth 回调地址。
+ * VERCEL_PROJECT_PRODUCTION_URL 是稳定的生产域名，应优先使用。
  */
 function getRedirectUri(): string {
   if (process.env.SECONDME_REDIRECT_URI) {
@@ -22,6 +25,9 @@ function getRedirectUri(): string {
   }
   if (process.env.NEXTAUTH_URL) {
     return `${process.env.NEXTAUTH_URL}/api/auth/callback`;
+  }
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/api/auth/callback`;
   }
   if (process.env.VERCEL_URL) {
     return `https://${process.env.VERCEL_URL}/api/auth/callback`;
