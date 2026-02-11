@@ -1,0 +1,144 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 用户表 - OAuth2 认证信息
+model User {
+  id              String    @id @default(cuid())
+  secondmeUserId  String    @unique
+  name            String?
+  avatar          String?
+  accessToken     String
+  refreshToken    String?
+  tokenExpiresAt  DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  agent           Agent?
+  chatSessions    ChatSession[]
+}
+
+// Agent Player - 每个用户的虚拟世界代理
+model Agent {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id])
+  nickname        String
+  avatar          String?
+  bio             String?
+
+  // Token 经济
+  tokenBalance    Int       @default(1000)  // 初始 1000 Token
+  totalEarned     Int       @default(0)
+  totalSpent      Int       @default(0)
+
+  // 状态
+  status          String    @default("active") // active | dormant | competing
+  lastActiveAt    DateTime  @default(now())
+
+  // 能力值
+  level           Int       @default(1)
+  experience      Int       @default(0)
+  wins            Int       @default(0)
+  losses          Int       @default(0)
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // 关系
+  sentChallenges      ArenaMatch[]  @relation("challenger")
+  receivedChallenges  ArenaMatch[]  @relation("opponent")
+  transactions        TokenTransaction[]
+  taskCompletions     TaskCompletion[]
+}
+
+// 聊天会话
+model ChatSession {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id])
+  secondmeSessionId String?
+  title             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+// 竞技场对战
+model ArenaMatch {
+  id              String    @id @default(cuid())
+  challengerId    String
+  challenger      Agent     @relation("challenger", fields: [challengerId], references: [id])
+  opponentId      String
+  opponent        Agent     @relation("opponent", fields: [opponentId], references: [id])
+
+  // 对战信息
+  type            String    @default("duel")  // duel | tournament | wrist_battle
+  status          String    @default("pending") // pending | active | completed | cancelled
+  tokenStake      Int       @default(0)       // 赌注 Token
+  winnerId        String?
+
+  // 对战记录
+  rounds          Int       @default(0)
+  log             String?   // JSON 格式的对战日志
+
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
+}
+
+// Token 交易记录
+model TokenTransaction {
+  id          String    @id @default(cuid())
+  agentId     String
+  agent       Agent     @relation(fields: [agentId], references: [id])
+
+  type        String    // earn | spend | transfer_in | transfer_out | stake | reward
+  amount      Int
+  balance     Int       // 交易后余额
+  description String?
+  referenceId String?   // 关联的比赛/任务 ID
+
+  createdAt   DateTime  @default(now())
+}
+
+// 世界任务
+model WorldTask {
+  id          String    @id @default(cuid())
+  title       String
+  description String
+  type        String    // daily | weekly | special | event
+  category    String    // combat | puzzle | social | exploration
+
+  // 奖励
+  tokenReward Int       @default(100)
+  expReward   Int       @default(10)
+
+  // 限制
+  maxParticipants Int?
+  requiredLevel   Int   @default(1)
+  expiresAt       DateTime?
+
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  completions TaskCompletion[]
+}
+
+// 任务完成记录
+model TaskCompletion {
+  id          String    @id @default(cuid())
+  agentId     String
+  agent       Agent     @relation(fields: [agentId], references: [id])
+  taskId      String
+  task        WorldTask @relation(fields: [taskId], references: [id])
+
+  score       Int?
+  tokensEarned Int     @default(0)
+  completedAt DateTime @default(now())
+
+  @@unique([agentId, taskId])
+}

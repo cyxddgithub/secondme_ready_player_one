@@ -1,0 +1,134 @@
+/**
+ * Second Me API 客户端
+ * Base URL: https://app.mindos.com/gate/lab
+ * OAuth2: https://go.second.me/oauth/
+ */
+
+const API_BASE_URL = process.env.SECONDME_API_BASE_URL || "https://app.mindos.com/gate/lab";
+const OAUTH_URL = "https://go.second.me/oauth/";
+
+export const secondMeConfig = {
+  clientId: process.env.SECONDME_CLIENT_ID || "",
+  clientSecret: process.env.SECONDME_CLIENT_SECRET || "",
+  redirectUri: process.env.SECONDME_REDIRECT_URI || "http://localhost:3000/api/auth/callback",
+  apiBaseUrl: API_BASE_URL,
+  oauthUrl: OAUTH_URL,
+};
+
+/** 构建 OAuth2 授权 URL */
+export function buildAuthUrl(state: string): string {
+  const params = new URLSearchParams({
+    client_id: secondMeConfig.clientId,
+    redirect_uri: secondMeConfig.redirectUri,
+    state,
+    response_type: "code",
+    scope: "user.info user.info.shades user.info.softmemory chat note.add",
+  });
+  return `${secondMeConfig.oauthUrl}?${params.toString()}`;
+}
+
+/** 用授权码换取 Token */
+export async function exchangeCodeForToken(code: string) {
+  const res = await fetch(`${API_BASE_URL}/oauth/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      grant_type: "authorization_code",
+      code,
+      client_id: secondMeConfig.clientId,
+      client_secret: secondMeConfig.clientSecret,
+      redirect_uri: secondMeConfig.redirectUri,
+    }),
+  });
+  return res.json();
+}
+
+/** 刷新 Token */
+export async function refreshAccessToken(refreshToken: string) {
+  const res = await fetch(`${API_BASE_URL}/oauth/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+      client_id: secondMeConfig.clientId,
+      client_secret: secondMeConfig.clientSecret,
+    }),
+  });
+  return res.json();
+}
+
+/** 获取用户信息 */
+export async function getUserInfo(accessToken: string) {
+  const res = await fetch(`${API_BASE_URL}/user/info`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.json();
+}
+
+/** 获取用户个性 Shades */
+export async function getUserShades(accessToken: string) {
+  const res = await fetch(`${API_BASE_URL}/user/shades`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.json();
+}
+
+/** 获取用户 Soft Memory */
+export async function getUserSoftMemory(accessToken: string) {
+  const res = await fetch(`${API_BASE_URL}/user/softmemory`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.json();
+}
+
+/** 获取聊天会话列表 */
+export async function getChatSessions(accessToken: string) {
+  const res = await fetch(`${API_BASE_URL}/chat/session/list`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.json();
+}
+
+/** 获取会话消息 */
+export async function getChatMessages(accessToken: string, sessionId: string) {
+  const res = await fetch(`${API_BASE_URL}/chat/session/messages?sessionId=${sessionId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.json();
+}
+
+/** Act 流式请求（SSE） - 用于 Agent 行为判断 */
+export async function actStream(
+  accessToken: string,
+  params: {
+    message: string;
+    systemPrompt?: string;
+    sessionId?: string;
+    actionControl?: string;
+    appId?: string;
+  }
+) {
+  const res = await fetch(`${API_BASE_URL}/act/stream`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  return res;
+}
+
+/** 添加笔记 */
+export async function addNote(accessToken: string, content: string) {
+  const res = await fetch(`${API_BASE_URL}/note/add`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ content }),
+  });
+  return res.json();
+}
