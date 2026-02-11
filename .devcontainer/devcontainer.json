@@ -1,0 +1,33 @@
+{
+  "name": "头号玩家 Ready Player One",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "头号玩家",
+      "onAutoForward": "openBrowser"
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "Prisma.prisma",
+        "bradlc.vscode-tailwindcss",
+        "dbaeumer.vscode-eslint"
+      ],
+      "settings": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.tabSize": 2
+      }
+    }
+  },
+  "secrets": {
+    "SECONDME_CLIENT_ID": {
+      "description": "SecondMe OAuth Client ID"
+    },
+    "SECONDME_CLIENT_SECRET": {
+      "description": "SecondMe OAuth Client Secret"
+    }
+  }
+}
