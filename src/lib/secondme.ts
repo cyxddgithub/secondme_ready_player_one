@@ -12,10 +12,27 @@ const API_BASE_URL = process.env.SECONDME_API_BASE_URL || "https://app.mindos.co
 const OAUTH_URL = process.env.SECONDME_OAUTH_URL || "https://go.second.me/oauth/";
 const TOKEN_ENDPOINT = process.env.SECONDME_TOKEN_ENDPOINT || `${API_BASE_URL}/api/oauth/token`;
 
+/**
+ * 自动推断应用 base URL（用于构建 redirect_uri）
+ * 优先级: SECONDME_REDIRECT_URI > NEXTAUTH_URL > VERCEL_URL > localhost
+ */
+function getRedirectUri(): string {
+  if (process.env.SECONDME_REDIRECT_URI) {
+    return process.env.SECONDME_REDIRECT_URI;
+  }
+  if (process.env.NEXTAUTH_URL) {
+    return `${process.env.NEXTAUTH_URL}/api/auth/callback`;
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}/api/auth/callback`;
+  }
+  return "http://localhost:3000/api/auth/callback";
+}
+
 export const secondMeConfig = {
   clientId: process.env.SECONDME_CLIENT_ID || "",
   clientSecret: process.env.SECONDME_CLIENT_SECRET || "",
-  redirectUri: process.env.SECONDME_REDIRECT_URI || "http://localhost:3000/api/auth/callback",
+  redirectUri: getRedirectUri(),
   apiBaseUrl: API_BASE_URL,
   oauthUrl: OAUTH_URL,
   tokenEndpoint: TOKEN_ENDPOINT,
