@@ -1,4 +1,13 @@
-export default function Home() {
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth";
+import LoginButton from "@/components/LoginButton";
+
+export default async function Home() {
+  const user = await getCurrentUser();
+  if (user) {
+    redirect("/dashboard");
+  }
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8">
       {/* Hero Section */}
@@ -42,13 +51,7 @@ export default function Home() {
         </div>
 
         {/* CTA */}
-        <a
-          href="/api/auth/login"
-          className="inline-flex items-center gap-2 bg-gray-900 text-white rounded-full px-8 py-3 font-medium hover:bg-gray-800 transition-colors"
-        >
-          通过 Second Me 登录
-          <span>&rarr;</span>
-        </a>
+        <LoginButton />
         <p className="text-xs text-gray-400 mt-4">
           登录即创建你的 Agent Player，开启生存之旅
         </p>
