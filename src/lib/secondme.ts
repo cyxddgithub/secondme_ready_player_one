@@ -4,13 +4,15 @@
  * OAuth2: https://go.second.me/oauth/
  *
  * API 路径规则:
- * - OAuth Token: {base_url}/api/oauth/token
+ * - OAuth Token 交换: {base_url}/api/oauth/token/code
+ * - OAuth Token 刷新: {base_url}/api/oauth/token/refresh
  * - SecondMe API: {base_url}/api/secondme/{endpoint}
  */
 
 const API_BASE_URL = process.env.SECONDME_API_BASE_URL || "https://app.mindos.com/gate/lab";
 const OAUTH_URL = process.env.SECONDME_OAUTH_URL || "https://go.second.me/oauth/";
-const TOKEN_ENDPOINT = process.env.SECONDME_TOKEN_ENDPOINT || `${API_BASE_URL}/api/oauth/token`;
+const TOKEN_ENDPOINT = process.env.SECONDME_TOKEN_ENDPOINT || `${API_BASE_URL}/api/oauth/token/code`;
+const REFRESH_TOKEN_ENDPOINT = process.env.SECONDME_REFRESH_TOKEN_ENDPOINT || `${API_BASE_URL}/api/oauth/token/refresh`;
 
 /**
  * 自动推断应用 base URL（用于构建 redirect_uri）
@@ -42,6 +44,7 @@ export const secondMeConfig = {
   apiBaseUrl: API_BASE_URL,
   oauthUrl: OAUTH_URL,
   tokenEndpoint: TOKEN_ENDPOINT,
+  refreshTokenEndpoint: REFRESH_TOKEN_ENDPOINT,
 };
 
 /** 构建 OAuth2 授权 URL */
@@ -56,7 +59,7 @@ export function buildAuthUrl(state: string): string {
   return `${secondMeConfig.oauthUrl}?${params.toString()}`;
 }
 
-/** 用授权码换取 Token（自动尝试 JSON 和 form-urlencoded 格式） */
+/** 用授权码换取 Token */
 export async function exchangeCodeForToken(code: string) {
   const params = {
     grant_type: "authorization_code",
@@ -69,25 +72,13 @@ export async function exchangeCodeForToken(code: string) {
   console.log("[OAuth] Token endpoint:", secondMeConfig.tokenEndpoint);
   console.log("[OAuth] Redirect URI:", secondMeConfig.redirectUri);
 
-  // 先尝试 JSON 格式
-  let res = await fetch(secondMeConfig.tokenEndpoint, {
+  const res = await fetch(secondMeConfig.tokenEndpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(params).toString(),
   });
 
-  console.log("[OAuth] JSON response status:", res.status);
-
-  // 如果 JSON 格式返回 404/405，尝试 form-urlencoded（标准 OAuth2 格式）
-  if (res.status === 404 || res.status === 405) {
-    console.log("[OAuth] JSON got", res.status, "- trying form-urlencoded...");
-    res = await fetch(secondMeConfig.tokenEndpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams(params).toString(),
-    });
-    console.log("[OAuth] form-urlencoded response status:", res.status);
-  }
+  console.log("[OAuth] Response status:", res.status);
 
   const result = await res.json();
   if (!res.ok) {
@@ -98,15 +89,17 @@ export async function exchangeCodeForToken(code: string) {
 
 /** 刷新 Token */
 export async function refreshAccessToken(refreshToken: string) {
-  const res = await fetch(secondMeConfig.tokenEndpoint, {
+  const params = {
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+    client_id: secondMeConfig.clientId,
+    client_secret: secondMeConfig.clientSecret,
+  };
+
+  const res = await fetch(secondMeConfig.refreshTokenEndpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      grant_type: "refresh_token",
-      refresh_token: refreshToken,
-      client_id: secondMeConfig.clientId,
-      client_secret: secondMeConfig.clientSecret,
-    }),
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(params).toString(),
   });
   return res.json();
 }

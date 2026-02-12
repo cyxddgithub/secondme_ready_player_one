@@ -33,7 +33,8 @@ SECONDME_REDIRECT_URI=${CALLBACK_URL}
 # SecondMe API
 SECONDME_API_BASE_URL=https://app.mindos.com/gate/lab
 SECONDME_OAUTH_URL=https://go.second.me/oauth/
-SECONDME_TOKEN_ENDPOINT=https://app.mindos.com/gate/lab/api/oauth/token
+SECONDME_TOKEN_ENDPOINT=https://app.mindos.com/gate/lab/api/oauth/token/code
+SECONDME_REFRESH_TOKEN_ENDPOINT=https://app.mindos.com/gate/lab/api/oauth/token/refresh
 
 # 数据库
 DATABASE_URL="file:./dev.db"
