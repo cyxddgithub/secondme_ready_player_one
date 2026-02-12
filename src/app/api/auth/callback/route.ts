@@ -56,7 +56,11 @@ export async function GET(request: NextRequest) {
     // 设置 session cookie
     await setSession(user.id);
 
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    // 检查是否已有 Agent，决定跳转目标
+    const agent = await prisma.agent.findUnique({ where: { userId: user.id } });
+    const redirectUrl = agent ? "/agent/career" : "/agent/create";
+
+    return NextResponse.redirect(new URL(redirectUrl, request.url));
   } catch (error) {
     console.error("OAuth callback error:", error);
     return NextResponse.redirect(new URL("/?error=callback_failed", request.url));

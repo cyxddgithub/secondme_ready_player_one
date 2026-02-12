@@ -31,6 +31,13 @@ model Agent {
   nickname        String
   avatar          String?
   bio             String?
+  isNpc           Boolean   @default(false) // NPC 填充球队
+
+  // 人生愿景 & 认知
+  lifeVision      String?   // 用户期望体验的人生
+  cognitiveScore  Int       @default(50) // 认知测试分数 (0-100)
+  riskTolerance   Int       @default(50) // 风险偏好 (0-100)
+  luckValue       Int       @default(50) // 运气值 (1-100)
 
   // Token 经济
   tokenBalance    Int       @default(1000)  // 初始 1000 Token
@@ -47,6 +54,18 @@ model Agent {
   wins            Int       @default(0)
   losses          Int       @default(0)
 
+  // NBA 职业属性
+  position        String?   // PG | SG | SF | PF | C
+  teamName        String?
+  shooting        Int       @default(50) // 投篮 (1-99)
+  defense         Int       @default(50) // 防守 (1-99)
+  speed           Int       @default(50) // 速度 (1-99)
+  stamina         Int       @default(50) // 体力 (1-99)
+  basketballIQ    Int       @default(50) // 篮球智商 (1-99)
+  passing         Int       @default(50) // 传球 (1-99)
+  rebound         Int       @default(50) // 篮板 (1-99)
+  salary          Int       @default(0)  // 当前赛季年薪 (Token)
+
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -55,6 +74,108 @@ model Agent {
   receivedChallenges  ArenaMatch[]  @relation("opponent")
   transactions        TokenTransaction[]
   taskCompletions     TaskCompletion[]
+  homeGames           NbaGame[]     @relation("homeTeam")
+  awayGames           NbaGame[]     @relation("awayTeam")
+  gameStats           NbaGameStats[]
+  activityLogs        ActivityLog[]
+  seasonStats         NbaSeasonStats[]
+  reflections         Reflection[]
+}
+
+// NBA 赛季
+model NbaSeason {
+  id          String    @id @default(cuid())
+  seasonNum   Int       @unique // 第几赛季
+  status      String    @default("active") // active | completed
+  gamesPlayed Int       @default(0)
+  totalGames  Int       @default(30) // 每赛季 30 场
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  games       NbaGame[]
+  stats       NbaSeasonStats[]
+}
+
+// NBA 比赛记录
+model NbaGame {
+  id          String    @id @default(cuid())
+  seasonId    String
+  season      NbaSeason @relation(fields: [seasonId], references: [id])
+  gameNum     Int       // 赛季内第几场
+  homeAgentId String
+  homeAgent   Agent     @relation("homeTeam", fields: [homeAgentId], references: [id])
+  awayAgentId String
+  awayAgent   Agent     @relation("awayTeam", fields: [awayAgentId], references: [id])
+  homeScore   Int       @default(0)
+  awayScore   Int       @default(0)
+  status      String    @default("scheduled") // scheduled | completed
+  narrative   String?   // 比赛叙事
+  playedAt    DateTime  @default(now())
+
+  stats       NbaGameStats[]
+}
+
+// NBA 比赛个人数据
+model NbaGameStats {
+  id          String    @id @default(cuid())
+  gameId      String
+  game        NbaGame   @relation(fields: [gameId], references: [id])
+  agentId     String
+  agent       Agent     @relation(fields: [agentId], references: [id])
+  points      Int       @default(0)
+  rebounds    Int       @default(0)
+  assists     Int       @default(0)
+  steals      Int       @default(0)
+  blocks      Int       @default(0)
+  turnovers   Int       @default(0)
+  minutes     Int       @default(0)
+  rating      Float     @default(0) // 综合评分
+
+  @@unique([gameId, agentId])
+}
+
+// 赛季统计汇总
+model NbaSeasonStats {
+  id              String    @id @default(cuid())
+  seasonId        String
+  season          NbaSeason @relation(fields: [seasonId], references: [id])
+  agentId         String
+  agent           Agent     @relation(fields: [agentId], references: [id])
+  gamesPlayed     Int       @default(0)
+  gamesWon        Int       @default(0)
+  totalPoints     Int       @default(0)
+  totalRebounds   Int       @default(0)
+  totalAssists    Int       @default(0)
+  totalSteals     Int       @default(0)
+  totalBlocks     Int       @default(0)
+  avgRating       Float     @default(0)
+  salaryCurrent   Int       @default(0) // 本赛季薪资
+  tokensEarned    Int       @default(0)
+
+  @@unique([seasonId, agentId])
+}
+
+// Agent 活动日志（离线期间记录）
+model ActivityLog {
+  id          String    @id @default(cuid())
+  agentId     String
+  agent       Agent     @relation(fields: [agentId], references: [id])
+  type        String    // game | salary | training | event | reflection
+  title       String
+  content     String
+  tokenChange Int       @default(0) // Token 变化
+  createdAt   DateTime  @default(now())
+}
+
+// 用户反思与策略调整
+model Reflection {
+  id              String    @id @default(cuid())
+  agentId         String
+  agent           Agent     @relation(fields: [agentId], references: [id])
+  content         String    // 用户反思内容
+  strategyChange  String?   // 策略调整 JSON
+  aiSummary       String?   // AI 分析总结
+  createdAt       DateTime  @default(now())
 }
 
 // 聊天会话
