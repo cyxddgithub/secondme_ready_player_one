@@ -56,20 +56,44 @@ export function buildAuthUrl(state: string): string {
   return `${secondMeConfig.oauthUrl}?${params.toString()}`;
 }
 
-/** 用授权码换取 Token */
+/** 用授权码换取 Token（自动尝试 JSON 和 form-urlencoded 格式） */
 export async function exchangeCodeForToken(code: string) {
-  const res = await fetch(secondMeConfig.tokenEndpoint, {
+  const params = {
+    grant_type: "authorization_code",
+    code,
+    client_id: secondMeConfig.clientId,
+    client_secret: secondMeConfig.clientSecret,
+    redirect_uri: secondMeConfig.redirectUri,
+  };
+
+  console.log("[OAuth] Token endpoint:", secondMeConfig.tokenEndpoint);
+  console.log("[OAuth] Redirect URI:", secondMeConfig.redirectUri);
+
+  // 先尝试 JSON 格式
+  let res = await fetch(secondMeConfig.tokenEndpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      grant_type: "authorization_code",
-      code,
-      client_id: secondMeConfig.clientId,
-      client_secret: secondMeConfig.clientSecret,
-      redirect_uri: secondMeConfig.redirectUri,
-    }),
+    body: JSON.stringify(params),
   });
-  return res.json();
+
+  console.log("[OAuth] JSON response status:", res.status);
+
+  // 如果 JSON 格式返回 404/405，尝试 form-urlencoded（标准 OAuth2 格式）
+  if (res.status === 404 || res.status === 405) {
+    console.log("[OAuth] JSON got", res.status, "- trying form-urlencoded...");
+    res = await fetch(secondMeConfig.tokenEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(params).toString(),
+    });
+    console.log("[OAuth] form-urlencoded response status:", res.status);
+  }
+
+  const result = await res.json();
+  if (!res.ok) {
+    console.error("[OAuth] Token exchange failed. Status:", res.status, "Body:", JSON.stringify(result));
+  }
+  return result;
 }
 
 /** 刷新 Token */
