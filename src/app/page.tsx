@@ -1,9 +1,11 @@
 import { getCurrentUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import LoginButton from "@/components/LoginButton";
 import UserInfoCard from "@/components/UserInfoCard";
 
 export default async function Home() {
   const user = await getCurrentUser();
+  const agent = user ? await prisma.agent.findUnique({ where: { userId: user.id } }) : null;
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8">
@@ -53,6 +55,7 @@ export default async function Home() {
             name={user.name}
             avatar={user.avatar}
             secondmeUserId={user.secondmeUserId}
+            hasAgent={!!agent}
           />
         ) : (
           <>

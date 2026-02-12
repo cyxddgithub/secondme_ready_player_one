@@ -2,9 +2,10 @@ interface UserInfoCardProps {
   name: string | null;
   avatar: string | null;
   secondmeUserId: string;
+  hasAgent?: boolean;
 }
 
-export default function UserInfoCard({ name, avatar, secondmeUserId }: UserInfoCardProps) {
+export default function UserInfoCard({ name, avatar, secondmeUserId, hasAgent }: UserInfoCardProps) {
   const displayName = name || "未命名用户";
   const initial = displayName[0];
 
@@ -42,12 +43,28 @@ export default function UserInfoCard({ name, avatar, secondmeUserId }: UserInfoC
 
         {/* Actions */}
         <div className="px-5 pb-5 pt-3 space-y-2.5">
+          {hasAgent ? (
+            <a
+              href="/agent/career"
+              className="flex items-center justify-center gap-2 w-full bg-gray-900 text-white rounded-full px-6 py-3 font-medium hover:bg-gray-800 transition-colors"
+            >
+              进入 NBA 生涯
+              <span>&rarr;</span>
+            </a>
+          ) : (
+            <a
+              href="/agent/create"
+              className="flex items-center justify-center gap-2 w-full bg-gray-900 text-white rounded-full px-6 py-3 font-medium hover:bg-gray-800 transition-colors"
+            >
+              创建 Agent 开启 NBA 人生
+              <span>&rarr;</span>
+            </a>
+          )}
           <a
             href="/dashboard"
-            className="flex items-center justify-center gap-2 w-full bg-gray-900 text-white rounded-full px-6 py-3 font-medium hover:bg-gray-800 transition-colors"
+            className="flex items-center justify-center w-full text-sm text-gray-500 hover:text-gray-700 transition-colors py-1.5 border border-gray-200 rounded-full"
           >
-            进入世界
-            <span>&rarr;</span>
+            世界大厅
           </a>
           <a
             href="/api/auth/logout"
