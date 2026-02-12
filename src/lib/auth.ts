@@ -26,14 +26,25 @@ export async function clearSession() {
 export async function getCurrentUser() {
   const cookieStore = await cookies();
   const userId = cookieStore.get(SESSION_COOKIE)?.value;
-  if (!userId) return null;
+  if (!userId) {
+    console.log("[Auth] No session cookie found");
+    return null;
+  }
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) return null;
+  if (!user) {
+    console.log("[Auth] User not found in DB for id:", userId);
+    return null;
+  }
 
   // 检查 token 是否过期，如果过期则刷新
   if (user.tokenExpiresAt && user.tokenExpiresAt < new Date()) {
-    if (!user.refreshToken) return null;
+    console.log("[Auth] Token expired for user:", userId, "expired at:", user.tokenExpiresAt.toISOString());
+
+    if (!user.refreshToken) {
+      console.log("[Auth] No refresh token available, user needs to re-login");
+      return null;
+    }
 
     try {
       const result = await refreshAccessToken(user.refreshToken);
@@ -46,10 +57,13 @@ export async function getCurrentUser() {
             tokenExpiresAt: new Date(Date.now() + (result.data.expiresIn || 7200) * 1000),
           },
         });
+        console.log("[Auth] Token refreshed successfully for user:", userId);
         return updatedUser;
       }
+      console.error("[Auth] Token refresh returned error:", JSON.stringify(result));
       return null;
-    } catch {
+    } catch (error) {
+      console.error("[Auth] Token refresh failed:", error);
       return null;
     }
   }
