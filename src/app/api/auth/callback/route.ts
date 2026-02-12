@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL(`/?error=token_exchange_failed&detail=${encodeURIComponent(errMsg)}`, request.url));
     }
 
-    const { access_token, refresh_token, expires_in } = tokenResult.data;
+    const { accessToken: access_token, refreshToken: refresh_token, expiresIn: expires_in } = tokenResult.data;
 
     // 获取用户信息
     const userInfoResult = await getUserInfo(access_token);

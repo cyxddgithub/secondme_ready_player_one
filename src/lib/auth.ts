@@ -41,9 +41,9 @@ export async function getCurrentUser() {
         const updatedUser = await prisma.user.update({
           where: { id: userId },
           data: {
-            accessToken: result.data.access_token,
-            refreshToken: result.data.refresh_token || user.refreshToken,
-            tokenExpiresAt: new Date(Date.now() + (result.data.expires_in || 7200) * 1000),
+            accessToken: result.data.accessToken,
+            refreshToken: result.data.refreshToken || user.refreshToken,
+            tokenExpiresAt: new Date(Date.now() + (result.data.expiresIn || 7200) * 1000),
           },
         });
         return updatedUser;
