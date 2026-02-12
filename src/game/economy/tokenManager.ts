@@ -33,6 +33,23 @@ export const TASK_REWARDS = {
   event: { min: 200, max: 1000 },
 } as const;
 
+/** 锦标赛经济参数 */
+export const TOURNAMENT_CONFIG = {
+  ENTRY_FEE: 10,
+  SYSTEM_SUBSIDY: 50,
+  MIN_TOKEN_TO_ENTER: 50,
+  PRIZE_DISTRIBUTION: [0.50, 0.25, 0.15, 0.10] as readonly number[],
+  MIN_PARTICIPANTS: 4,
+  MAX_PARTICIPANTS: 32,
+  DEFAULT_ROUNDS: 3,
+  REGISTRATION_DURATION_MS: 60 * 1000,    // 1 分钟报名期
+  TOURNAMENT_INTERVAL_MS: 5 * 60 * 1000,  // 5 分钟间隔
+  NAME_TEMPLATES: [
+    "竞技场争霸赛", "Token 大乱斗", "巅峰对决", "荣耀之战",
+    "时间掠夺者杯", "生存挑战赛", "至尊锦标赛", "命运角斗场",
+  ],
+} as const;
+
 /** 竞技场奖励倍率 */
 export const ARENA_MULTIPLIERS = {
   duel: 2.0,        // 1v1 对决：赢家获得 2x 赌注

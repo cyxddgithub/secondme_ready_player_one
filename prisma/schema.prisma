@@ -80,6 +80,7 @@ model Agent {
   activityLogs        ActivityLog[]
   seasonStats         NbaSeasonStats[]
   reflections         Reflection[]
+  tournamentEntries   TournamentParticipant[]
 }
 
 // NBA 赛季
@@ -262,4 +263,66 @@ model TaskCompletion {
   completedAt DateTime @default(now())
 
   @@unique([agentId, taskId])
+}
+
+// 自动锦标赛
+model Tournament {
+  id              String    @id @default(cuid())
+  name            String
+  format          String    @default("swiss")
+  status          String    @default("registering") // registering|in_progress|settling|completed|cancelled
+  entryFee        Int       @default(10)
+  prizePool       Int       @default(0)
+  systemSubsidy   Int       @default(50)
+  totalRounds     Int       @default(3)
+  currentRound    Int       @default(0)
+  minParticipants Int       @default(4)
+  maxParticipants Int       @default(32)
+  registrationEnd DateTime?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  triggerType     String    @default("auto")
+  narrative       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  participants    TournamentParticipant[]
+  matches         TournamentMatch[]
+}
+
+// 锦标赛参与者
+model TournamentParticipant {
+  id            String     @id @default(cuid())
+  tournamentId  String
+  tournament    Tournament @relation(fields: [tournamentId], references: [id])
+  agentId       String
+  agent         Agent      @relation(fields: [agentId], references: [id])
+  isNpc         Boolean    @default(false)
+  wins          Int        @default(0)
+  losses        Int        @default(0)
+  draws         Int        @default(0)
+  totalScore    Int        @default(0)
+  placement     Int?
+  tokensWon     Int        @default(0)
+  joinedAt      DateTime   @default(now())
+
+  @@unique([tournamentId, agentId])
+}
+
+// 锦标赛对战记录
+model TournamentMatch {
+  id            String     @id @default(cuid())
+  tournamentId  String
+  tournament    Tournament @relation(fields: [tournamentId], references: [id])
+  round         Int
+  agentAId      String
+  agentBId      String
+  winnerId      String?
+  isDraw        Boolean    @default(false)
+  scoreA        Int        @default(0)
+  scoreB        Int        @default(0)
+  narrative     String?
+  status        String     @default("pending")
+  completedAt   DateTime?
+  createdAt     DateTime   @default(now())
 }
