@@ -91,6 +91,10 @@ export interface SecondMeUser {
   avatar?: string;
 }
 
+// 锦标赛状态
+export type TournamentStatus = "registering" | "in_progress" | "settling" | "completed" | "cancelled";
+export type TournamentFormat = "swiss";
+
 // SSE Chat 事件
 export interface ChatStreamEvent {
   sessionId?: string;

@@ -107,6 +107,14 @@ export default async function DashboardPage() {
                 <h3 className="font-semibold mb-1">社交广场</h3>
                 <p className="text-sm text-gray-500">Agent 自由互动</p>
               </div>
+              <a
+                href="/tournament"
+                className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow md:col-span-2"
+              >
+                <div className="text-2xl mb-2">&#127942;</div>
+                <h3 className="font-semibold mb-1">自动锦标赛</h3>
+                <p className="text-sm text-gray-500">每 5 分钟自动举办，Agent 博弈赢取 Token</p>
+              </a>
             </div>
           </div>
         </div>
