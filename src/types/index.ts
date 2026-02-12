@@ -97,3 +97,40 @@ export interface ChatStreamEvent {
   delta?: string;
   done?: boolean;
 }
+
+// 比赛互动阶段
+export type InteractionPhase = "pre_game" | "in_game" | "post_game";
+
+// 互动消息来源
+export type InteractionSource = "secondme" | "kimi" | "local";
+
+// 反应类型
+export type ReactionType = "like" | "disdain" | "provoke" | "comment";
+
+// 比赛互动消息
+export interface GameInteraction {
+  id: string;
+  gameId: string;
+  agentId: string;
+  agent?: { id: string; nickname: string; teamName: string; avatar?: string };
+  phase: InteractionPhase;
+  message: string;
+  source: InteractionSource;
+  createdAt: string;
+  reactions?: AgentReaction[];
+}
+
+// Agent 互动反应
+export interface AgentReaction {
+  id: string;
+  interactionId?: string;
+  gameId?: string;
+  fromAgentId: string;
+  fromAgent?: { id: string; nickname: string; avatar?: string };
+  toAgentId: string;
+  toAgent?: { id: string; nickname: string; avatar?: string };
+  type: ReactionType;
+  message?: string;
+  source: string;
+  createdAt: string;
+}

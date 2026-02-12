@@ -35,6 +35,27 @@ interface Agent {
   }[];
 }
 
+interface InteractionMsg {
+  id: string;
+  agentId: string;
+  phase: string;
+  message: string;
+  source: string;
+  createdAt: string;
+}
+
+interface ReactionData {
+  id: string;
+  fromAgentId: string;
+  fromAgent?: { id: string; nickname: string };
+  toAgentId: string;
+  toAgent?: { id: string; nickname: string };
+  type: string;
+  message?: string;
+  source: string;
+  createdAt: string;
+}
+
 interface GameRecord {
   id: string;
   gameNum: number;
@@ -45,6 +66,8 @@ interface GameRecord {
   narrative: string;
   stats: { points: number; rebounds: number; assists: number; steals: number; blocks: number; rating: number }[];
   season: { seasonNum: number };
+  interactions?: InteractionMsg[];
+  _count?: { interactions: number };
 }
 
 interface ActivityLog {
@@ -82,6 +105,12 @@ export default function CareerPage() {
   const [focusAttr, setFocusAttr] = useState("");
   const [reflecting, setReflecting] = useState(false);
   const [reflectResult, setReflectResult] = useState<string | null>(null);
+
+  // 互动相关
+  const [expandedGame, setExpandedGame] = useState<string | null>(null);
+  const [gameReactions, setGameReactions] = useState<Record<string, ReactionData[]>>({});
+  const [commentText, setCommentText] = useState("");
+  const [reacting, setReacting] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -152,6 +181,53 @@ export default function CareerPage() {
       console.error("反思提交失败:", err);
     } finally {
       setReflecting(false);
+    }
+  }
+
+  // 加载某场比赛的反应
+  async function loadGameReactions(gameId: string) {
+    try {
+      const res = await fetch(`/api/game/react?gameId=${gameId}`);
+      const data = await res.json();
+      if (data.code === 0) {
+        setGameReactions(prev => ({ ...prev, [gameId]: data.data }));
+      }
+    } catch (err) {
+      console.error("加载反应失败:", err);
+    }
+  }
+
+  // 展开/折叠比赛互动
+  function toggleGameExpand(gameId: string) {
+    if (expandedGame === gameId) {
+      setExpandedGame(null);
+    } else {
+      setExpandedGame(gameId);
+      loadGameReactions(gameId);
+    }
+    setCommentText("");
+  }
+
+  // 发送反应
+  async function handleReact(gameId: string, toAgentId: string, type: string, interactionId?: string, message?: string) {
+    if (!agent) return;
+    setReacting(true);
+    try {
+      const res = await fetch("/api/game/react", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gameId, toAgentId, type, interactionId, message }),
+      });
+      const data = await res.json();
+      if (data.code === 0) {
+        // 刷新反应列表
+        await loadGameReactions(gameId);
+        setCommentText("");
+      }
+    } catch (err) {
+      console.error("反应失败:", err);
+    } finally {
+      setReacting(false);
     }
   }
 
@@ -350,22 +426,192 @@ export default function CareerPage() {
           </div>
         )}
 
-        {/* 比赛记录 */}
+        {/* 比赛记录（含互动） */}
         {tab === "games" && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="space-y-3">
             {games.length > 0 ? (
-              <div className="divide-y divide-gray-50">
-                {games.map((game) => (
-                  <div key={game.id} className="p-4">
-                    <GameRow game={game} agentId={agent.id} />
-                    {game.narrative && (
-                      <p className="text-sm text-gray-500 mt-2 ml-1">{game.narrative}</p>
+              games.map((game) => {
+                const isExpanded = expandedGame === game.id;
+                const interactionCount = game._count?.interactions || game.interactions?.length || 0;
+                const opponentAgent = game.homeAgent.id === agent.id ? game.awayAgent : game.homeAgent;
+                const reactions = gameReactions[game.id] || [];
+
+                return (
+                  <div key={game.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    {/* 比赛基本信息 */}
+                    <div className="p-4">
+                      <GameRow game={game} agentId={agent.id} />
+                      {game.narrative && (
+                        <p className="text-sm text-gray-500 mt-2 ml-1">{game.narrative}</p>
+                      )}
+
+                      {/* 展开互动按钮 */}
+                      <button
+                        onClick={() => toggleGameExpand(game.id)}
+                        className="mt-2 flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                      >
+                        <span>{isExpanded ? "收起互动" : "查看互动"}</span>
+                        {interactionCount > 0 && (
+                          <span className="bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full text-xs font-medium">
+                            {interactionCount}
+                          </span>
+                        )}
+                        <svg className={`w-3 h-3 transition-transform ${isExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    {/* 展开的互动区域 */}
+                    {isExpanded && (
+                      <div className="border-t border-gray-100 bg-gray-50/50">
+                        {/* 互动消息时间线 */}
+                        {game.interactions && game.interactions.length > 0 ? (
+                          <div className="p-4 space-y-3">
+                            {(["pre_game", "in_game", "post_game"] as const).map((phase) => {
+                              const phaseMessages = game.interactions!.filter(i => i.phase === phase);
+                              if (phaseMessages.length === 0) return null;
+
+                              return (
+                                <div key={phase}>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-xs font-medium text-gray-400">
+                                      {phaseLabel(phase)}
+                                    </span>
+                                    <div className="flex-1 h-px bg-gray-200" />
+                                  </div>
+                                  <div className="space-y-2">
+                                    {phaseMessages.map((msg) => {
+                                      const isMine = msg.agentId === agent.id;
+                                      const agentName = isMine ? agent.nickname : opponentAgent.nickname;
+
+                                      return (
+                                        <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+                                          <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
+                                            isMine
+                                              ? "bg-gray-900 text-white rounded-br-md"
+                                              : "bg-white border border-gray-200 text-gray-800 rounded-bl-md"
+                                          }`}>
+                                            <p className={`text-xs font-medium mb-0.5 ${isMine ? "text-gray-400" : "text-gray-500"}`}>
+                                              {agentName}
+                                              {msg.source !== "local" && (
+                                                <span className={`ml-1 ${isMine ? "text-gray-500" : "text-gray-400"}`}>
+                                                  via {sourceLabel(msg.source)}
+                                                </span>
+                                              )}
+                                            </p>
+                                            <p className="text-sm">{msg.message}</p>
+
+                                            {/* 对对方的消息可以反应 */}
+                                            {!isMine && (
+                                              <div className="flex items-center gap-1 mt-1.5">
+                                                <ReactionButton
+                                                  label="👍"
+                                                  title="点赞"
+                                                  disabled={reacting}
+                                                  onClick={() => handleReact(game.id, msg.agentId, "like", msg.id)}
+                                                />
+                                                <ReactionButton
+                                                  label="😤"
+                                                  title="不屑"
+                                                  disabled={reacting}
+                                                  onClick={() => handleReact(game.id, msg.agentId, "disdain", msg.id)}
+                                                />
+                                                <ReactionButton
+                                                  label="⚡"
+                                                  title="挑衅"
+                                                  disabled={reacting}
+                                                  onClick={() => handleReact(game.id, msg.agentId, "provoke", msg.id)}
+                                                />
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="p-4 text-center text-sm text-gray-400">
+                            本场比赛暂无互动消息
+                          </div>
+                        )}
+
+                        {/* 反应列表 */}
+                        {reactions.length > 0 && (
+                          <div className="px-4 pb-2">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-xs font-medium text-gray-400">赛后互动</span>
+                              <div className="flex-1 h-px bg-gray-200" />
+                            </div>
+                            <div className="space-y-1.5">
+                              {reactions.map((r) => (
+                                <div key={r.id} className="flex items-start gap-2 text-sm">
+                                  <span className="text-xs mt-0.5">{reactionIcon(r.type)}</span>
+                                  <span className="text-gray-600">
+                                    <span className="font-medium text-gray-800">{r.fromAgent?.nickname}</span>
+                                    {" "}
+                                    {reactionVerb(r.type)}
+                                    {" "}
+                                    <span className="font-medium text-gray-800">{r.toAgent?.nickname}</span>
+                                    {r.message && (
+                                      <span className="text-gray-500">：{r.message}</span>
+                                    )}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 留言输入框 */}
+                        <div className="p-4 pt-2 border-t border-gray-100">
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={commentText}
+                              onChange={(e) => setCommentText(e.target.value)}
+                              placeholder={`对 ${opponentAgent.nickname} 说点什么...`}
+                              className="flex-1 px-3 py-2 text-sm rounded-full border border-gray-200 focus:border-gray-400 focus:ring-1 focus:ring-gray-400 outline-none transition-all"
+                              maxLength={100}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && commentText.trim()) {
+                                  handleReact(game.id, opponentAgent.id, "comment", undefined, commentText.trim());
+                                }
+                              }}
+                            />
+                            <button
+                              onClick={() => {
+                                if (commentText.trim()) {
+                                  handleReact(game.id, opponentAgent.id, "comment", undefined, commentText.trim());
+                                }
+                              }}
+                              disabled={reacting || !commentText.trim()}
+                              className="px-4 py-2 bg-gray-900 text-white rounded-full text-sm font-medium hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                            >
+                              {reacting ? "..." : "留言"}
+                            </button>
+                            <button
+                              onClick={() => handleReact(game.id, opponentAgent.id, "provoke", undefined, commentText.trim() || undefined)}
+                              disabled={reacting}
+                              className="px-4 py-2 bg-red-500 text-white rounded-full text-sm font-medium hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                            >
+                              挑衅
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     )}
                   </div>
-                ))}
-              </div>
+                );
+              })
             ) : (
-              <div className="p-8 text-center text-gray-400">暂无比赛记录，点击"模拟比赛"开始</div>
+              <div className="bg-white rounded-xl p-8 text-center text-gray-400 shadow-sm border border-gray-100">
+                暂无比赛记录，点击"模拟比赛"开始
+              </div>
             )}
           </div>
         )}
@@ -468,6 +714,23 @@ export default function CareerPage() {
   );
 }
 
+// ===== 辅助组件和函数 =====
+
+function ReactionButton({ label, title, disabled, onClick }: {
+  label: string; title: string; disabled: boolean; onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-white/20 transition-all text-xs disabled:opacity-50"
+    >
+      {label}
+    </button>
+  );
+}
+
 function StatRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
     <div className="flex justify-between items-center py-1.5">
@@ -517,4 +780,36 @@ function logIcon(type: string): string {
     game: "🏀", salary: "💰", training: "💪", event: "🎉", reflection: "🧠",
   };
   return map[type] || "📋";
+}
+
+function phaseLabel(phase: string): string {
+  const map: Record<string, string> = {
+    pre_game: "赛前叫嚣",
+    in_game: "赛中垃圾话",
+    post_game: "赛后感言",
+  };
+  return map[phase] || phase;
+}
+
+function sourceLabel(source: string): string {
+  const map: Record<string, string> = {
+    secondme: "Second Me",
+    kimi: "AI",
+    local: "",
+  };
+  return map[source] || source;
+}
+
+function reactionIcon(type: string): string {
+  const map: Record<string, string> = {
+    like: "👍", disdain: "😤", provoke: "⚡", comment: "💬",
+  };
+  return map[type] || "💬";
+}
+
+function reactionVerb(type: string): string {
+  const map: Record<string, string> = {
+    like: "给", disdain: "不屑了", provoke: "挑衅了", comment: "对",
+  };
+  return map[type] || "";
 }

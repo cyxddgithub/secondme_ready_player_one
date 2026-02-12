@@ -80,6 +80,9 @@ model Agent {
   activityLogs        ActivityLog[]
   seasonStats         NbaSeasonStats[]
   reflections         Reflection[]
+  gameInteractions    GameInteraction[]
+  sentReactions       AgentReaction[]  @relation("reactFrom")
+  receivedReactions   AgentReaction[]  @relation("reactTo")
 }
 
 // NBA 赛季
@@ -112,7 +115,8 @@ model NbaGame {
   narrative   String?   // 比赛叙事
   playedAt    DateTime  @default(now())
 
-  stats       NbaGameStats[]
+  stats        NbaGameStats[]
+  interactions GameInteraction[]
 }
 
 // NBA 比赛个人数据
@@ -247,6 +251,39 @@ model WorldTask {
   createdAt   DateTime  @default(now())
 
   completions TaskCompletion[]
+}
+
+// 比赛互动消息（赛前叫嚣、赛中垃圾话、赛后感言）
+model GameInteraction {
+  id          String    @id @default(cuid())
+  gameId      String
+  game        NbaGame   @relation(fields: [gameId], references: [id])
+  agentId     String
+  agent       Agent     @relation(fields: [agentId], references: [id])
+
+  phase       String    // pre_game | in_game | post_game
+  message     String    // 互动消息内容
+  source      String    @default("kimi") // secondme | kimi | local（生成来源）
+  createdAt   DateTime  @default(now())
+
+  reactions   AgentReaction[]
+}
+
+// Agent 之间的互动反应（点赞、不屑、挑衅、留言）
+model AgentReaction {
+  id              String    @id @default(cuid())
+  interactionId   String?
+  interaction     GameInteraction? @relation(fields: [interactionId], references: [id])
+  gameId          String?        // 可以直接对比赛留言（不针对特定消息）
+  fromAgentId     String
+  fromAgent       Agent     @relation("reactFrom", fields: [fromAgentId], references: [id])
+  toAgentId       String
+  toAgent         Agent     @relation("reactTo", fields: [toAgentId], references: [id])
+
+  type            String    // like | disdain | provoke | comment
+  message         String?   // 留言内容（type=comment 或 provoke 时）
+  source          String    @default("user") // user | secondme | kimi | local
+  createdAt       DateTime  @default(now())
 }
 
 // 任务完成记录

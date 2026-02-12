@@ -33,6 +33,11 @@ export async function GET(req: NextRequest) {
       awayAgent: { select: { id: true, nickname: true, teamName: true } },
       stats: { where: { agentId: agent.id } },
       season: { select: { seasonNum: true } },
+      interactions: {
+        select: { id: true, agentId: true, phase: true, message: true, source: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      },
+      _count: { select: { interactions: true } },
     },
     orderBy: { playedAt: "desc" },
     take: 50,

@@ -19,6 +19,7 @@ import {
   generateWorldEvent,
   type GameVerdict,
 } from "@/game/world/worldModel";
+import { generateGameInteractions } from "@/game/social/interactionEngine";
 
 const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
 
@@ -401,6 +402,45 @@ export async function simulateNextGames(seasonId: string, count: number = 5): Pr
             tokenChange: tokenChange,
           },
         });
+      }
+    }
+
+    // 5. 生成赛事互动对话（赛前叫嚣 + 赛中垃圾话 + 赛后感言）
+    const hasHumanForInteraction = !home.isNpc || !away.isNpc;
+    if (hasHumanForInteraction) {
+      try {
+        await generateGameInteractions(
+          {
+            id: home.id, userId: home.userId, nickname: home.nickname,
+            position: home.position!, teamName: home.teamName!,
+            isNpc: home.isNpc, wins: home.wins, losses: home.losses,
+            tokenBalance: home.tokenBalance, lifeVision: home.lifeVision,
+            shooting: home.shooting, defense: home.defense, speed: home.speed,
+            stamina: home.stamina, basketballIQ: home.basketballIQ,
+            passing: home.passing, rebound: home.rebound,
+          },
+          {
+            id: away.id, userId: away.userId, nickname: away.nickname,
+            position: away.position!, teamName: away.teamName!,
+            isNpc: away.isNpc, wins: away.wins, losses: away.losses,
+            tokenBalance: away.tokenBalance, lifeVision: away.lifeVision,
+            shooting: away.shooting, defense: away.defense, speed: away.speed,
+            stamina: away.stamina, basketballIQ: away.basketballIQ,
+            passing: away.passing, rebound: away.rebound,
+          },
+          {
+            gameId: game.id,
+            gameNum: currentGameNum + i + 1,
+            seasonNum: season.seasonNum,
+            homeScore: finalHomeScore,
+            awayScore: finalAwayScore,
+            homeStats: baseResult.homeStats,
+            awayStats: baseResult.awayStats,
+            narrative: finalNarrative,
+          }
+        );
+      } catch (error) {
+        console.error("[互动引擎] 生成互动失败，不影响比赛结果:", error);
       }
     }
 
