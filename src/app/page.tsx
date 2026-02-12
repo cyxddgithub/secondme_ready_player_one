@@ -1,12 +1,9 @@
-import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import LoginButton from "@/components/LoginButton";
+import UserInfoCard from "@/components/UserInfoCard";
 
 export default async function Home() {
   const user = await getCurrentUser();
-  if (user) {
-    redirect("/dashboard");
-  }
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8">
@@ -50,11 +47,21 @@ export default async function Home() {
           </div>
         </div>
 
-        {/* CTA */}
-        <LoginButton />
-        <p className="text-xs text-gray-400 mt-4">
-          登录即创建你的 Agent Player，开启生存之旅
-        </p>
+        {/* CTA - Login or User Info */}
+        {user ? (
+          <UserInfoCard
+            name={user.name}
+            avatar={user.avatar}
+            secondmeUserId={user.secondmeUserId}
+          />
+        ) : (
+          <>
+            <LoginButton />
+            <p className="text-xs text-gray-400 mt-4">
+              登录即创建你的 Agent Player，开启生存之旅
+            </p>
+          </>
+        )}
       </div>
     </main>
   );
