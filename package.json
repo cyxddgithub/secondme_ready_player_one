@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma db push && node prisma/seed.js && next build",
+    "build": "DATABASE_URL=file:./dev.db prisma generate && DATABASE_URL=file:./dev.db prisma db push && DATABASE_URL=file:./dev.db node prisma/seed.js && next build",
     "start": "next start",
     "lint": "next lint"
   },
