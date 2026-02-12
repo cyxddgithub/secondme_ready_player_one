@@ -18,6 +18,7 @@ interface Agent {
   salary: number;
   tokenBalance: number;
   totalEarned: number;
+  totalSpent: number;
   wins: number;
   losses: number;
   luckValue: number;
@@ -55,6 +56,14 @@ interface ActivityLog {
   createdAt: string;
 }
 
+interface WorldStatus {
+  worldModelActive: boolean;
+  worldModelEngine: string;
+  activeSeason: { seasonNum: number; gamesPlayed: number; totalGames: number } | null;
+  totalAgents: number;
+  humanAgents: number;
+}
+
 type Tab = "overview" | "games" | "logs" | "reflect";
 
 export default function CareerPage() {
@@ -62,6 +71,7 @@ export default function CareerPage() {
   const [agent, setAgent] = useState<Agent | null>(null);
   const [games, setGames] = useState<GameRecord[]>([]);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
+  const [worldStatus, setWorldStatus] = useState<WorldStatus | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
   const [loading, setLoading] = useState(true);
   const [simulating, setSimulating] = useState(false);
@@ -75,10 +85,11 @@ export default function CareerPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const [agentRes, gamesRes, logsRes] = await Promise.all([
+      const [agentRes, gamesRes, logsRes, worldRes] = await Promise.all([
         fetch("/api/agent/status"),
         fetch("/api/nba/games"),
         fetch("/api/agent/logs"),
+        fetch("/api/world/status"),
       ]);
 
       const agentData = await agentRes.json();
@@ -93,6 +104,9 @@ export default function CareerPage() {
 
       const logsData = await logsRes.json();
       if (logsData.code === 0) setLogs(logsData.data);
+
+      const worldData = await worldRes.json();
+      if (worldData.code === 0) setWorldStatus(worldData.data);
     } catch (err) {
       console.error("加载失败:", err);
     } finally {
@@ -227,6 +241,31 @@ export default function CareerPage() {
             ))}
           </div>
         </div>
+
+        {/* 世界模型状态 */}
+        {worldStatus && (
+          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 mb-6 flex flex-wrap items-center gap-x-6 gap-y-2">
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${worldStatus.worldModelActive ? "bg-green-500 animate-pulse" : "bg-gray-400"}`} />
+              <span className="text-xs text-gray-500">世界模型</span>
+              <span className="text-xs font-medium">{worldStatus.worldModelEngine}</span>
+            </div>
+            {worldStatus.activeSeason && (
+              <div className="text-xs text-gray-500">
+                第 {worldStatus.activeSeason.seasonNum} 赛季 · {worldStatus.activeSeason.gamesPlayed}/{worldStatus.activeSeason.totalGames} 场
+              </div>
+            )}
+            <div className="text-xs text-gray-500">
+              {worldStatus.totalAgents} 名球员（{worldStatus.humanAgents} 真人）
+            </div>
+            <div className="flex items-center gap-1 text-xs">
+              <span className="text-green-600">+{agent.totalEarned}</span>
+              <span className="text-gray-400">/</span>
+              <span className="text-red-500">-{agent.totalSpent}</span>
+              <span className="text-gray-400">Token</span>
+            </div>
+          </div>
+        )}
 
         {/* 模拟按钮 */}
         <div className="flex items-center gap-3 mb-6">

@@ -1,6 +1,7 @@
 /**
  * NBA 赛季模拟器
  * 负责创建赛季、生成赛程、模拟比赛、结算薪资
+ * 由 Kimi 世界模型驱动裁决和叙事
  */
 
 import { prisma } from "@/lib/prisma";
@@ -12,6 +13,12 @@ import {
   generateNpcName,
   NBA_TEAMS,
 } from "./nbaEngine";
+import {
+  judgeGame,
+  settleSeasonByWorldModel,
+  generateWorldEvent,
+  type GameVerdict,
+} from "@/game/world/worldModel";
 
 const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
 
@@ -119,9 +126,80 @@ export async function createSeason(): Promise<string> {
       where: { id: agent.id },
       data: { salary },
     });
+
+    // 赛季开始事件
+    if (!agent.isNpc) {
+      const worldEvent = await generateWorldEvent({
+        nickname: agent.nickname,
+        position: agent.position!,
+        teamName: agent.teamName!,
+        shooting: agent.shooting,
+        defense: agent.defense,
+        speed: agent.speed,
+        stamina: agent.stamina,
+        basketballIQ: agent.basketballIQ,
+        passing: agent.passing,
+        rebound: agent.rebound,
+        luckValue: agent.luckValue,
+        cognitiveScore: agent.cognitiveScore,
+        wins: agent.wins,
+        losses: agent.losses,
+        tokenBalance: agent.tokenBalance,
+        lifeVision: agent.lifeVision,
+      });
+
+      await prisma.activityLog.create({
+        data: {
+          agentId: agent.id,
+          type: "event",
+          title: `第 ${seasonNum} 赛季开始`,
+          content: `新赛季开幕！年薪 ${salary} Token。\n${worldEvent}`,
+          tokenChange: 0,
+        },
+      });
+    }
   }
 
   return season.id;
+}
+
+/** 将 Agent 数据转为世界模型格式 */
+function toWorldAgent(agent: {
+  nickname: string;
+  position: string | null;
+  teamName: string | null;
+  shooting: number;
+  defense: number;
+  speed: number;
+  stamina: number;
+  basketballIQ: number;
+  passing: number;
+  rebound: number;
+  luckValue: number;
+  cognitiveScore: number;
+  wins: number;
+  losses: number;
+  tokenBalance: number;
+  lifeVision: string | null;
+}) {
+  return {
+    nickname: agent.nickname,
+    position: agent.position || "SF",
+    teamName: agent.teamName || "自由球员",
+    shooting: agent.shooting,
+    defense: agent.defense,
+    speed: agent.speed,
+    stamina: agent.stamina,
+    basketballIQ: agent.basketballIQ,
+    passing: agent.passing,
+    rebound: agent.rebound,
+    luckValue: agent.luckValue,
+    cognitiveScore: agent.cognitiveScore,
+    wins: agent.wins,
+    losses: agent.losses,
+    tokenBalance: agent.tokenBalance,
+    lifeVision: agent.lifeVision,
+  };
 }
 
 /** 模拟赛季中的下一批比赛（每次模拟 5 场） */
@@ -172,7 +250,36 @@ export async function simulateNextGames(seasonId: string, count: number = 5): Pr
       cognitiveScore: away.cognitiveScore,
     };
 
-    const result = simulateGame(homeAttrs, awayAttrs, home.nickname, away.nickname);
+    // 1. 先用引擎生成基础数据
+    const baseResult = simulateGame(homeAttrs, awayAttrs, home.nickname, away.nickname);
+
+    // 2. 世界模型裁决（Kimi AI）
+    let verdict: GameVerdict;
+    // 只对真人玩家对局调用世界模型（节约 API）
+    const hasHumanPlayer = !home.isNpc || !away.isNpc;
+    if (hasHumanPlayer) {
+      verdict = await judgeGame(
+        toWorldAgent(home),
+        toWorldAgent(away),
+        { seasonNum: season.seasonNum, gameNum: currentGameNum + i + 1, totalGames: season.totalGames }
+      );
+    } else {
+      verdict = {
+        homeScoreAdjust: 0,
+        awayScoreAdjust: 0,
+        homeStatBonus: null,
+        awayStatBonus: null,
+        narrative: baseResult.narrative,
+        mvp: baseResult.homeScore > baseResult.awayScore ? "home" : "away",
+        eventType: "normal",
+        tokenAdjust: { home: -3, away: -3 },
+      };
+    }
+
+    // 3. 合并引擎数据 + 世界模型裁决
+    const finalHomeScore = baseResult.homeScore + verdict.homeScoreAdjust;
+    const finalAwayScore = baseResult.awayScore + verdict.awayScoreAdjust;
+    const finalNarrative = hasHumanPlayer ? verdict.narrative : baseResult.narrative;
 
     // 创建比赛记录
     const game = await prisma.nbaGame.create({
@@ -181,23 +288,23 @@ export async function simulateNextGames(seasonId: string, count: number = 5): Pr
         gameNum: currentGameNum + i + 1,
         homeAgentId: home.id,
         awayAgentId: away.id,
-        homeScore: result.homeScore,
-        awayScore: result.awayScore,
+        homeScore: finalHomeScore,
+        awayScore: finalAwayScore,
         status: "completed",
-        narrative: result.narrative,
+        narrative: finalNarrative,
       },
     });
 
     // 记录个人数据
     await prisma.nbaGameStats.create({
-      data: { gameId: game.id, agentId: home.id, ...result.homeStats },
+      data: { gameId: game.id, agentId: home.id, ...baseResult.homeStats },
     });
     await prisma.nbaGameStats.create({
-      data: { gameId: game.id, agentId: away.id, ...result.awayStats },
+      data: { gameId: game.id, agentId: away.id, ...baseResult.awayStats },
     });
 
     // 更新胜负
-    const homeWon = result.homeScore > result.awayScore;
+    const homeWon = finalHomeScore > finalAwayScore;
     await prisma.agent.update({
       where: { id: homeWon ? home.id : away.id },
       data: { wins: { increment: 1 } },
@@ -207,11 +314,12 @@ export async function simulateNextGames(seasonId: string, count: number = 5): Pr
       data: { losses: { increment: 1 } },
     });
 
-    // 更新赛季统计
-    for (const [agent, stats, won] of [
-      [home, result.homeStats, homeWon] as const,
-      [away, result.awayStats, !homeWon] as const,
+    // 4. 世界模型 Token 结算 - 扣除行动消耗 + 分配奖励
+    for (const [agent, stats, won, tokenChange, statBonus] of [
+      [home, baseResult.homeStats, homeWon, verdict.tokenAdjust.home, verdict.homeStatBonus] as const,
+      [away, baseResult.awayStats, !homeWon, verdict.tokenAdjust.away, verdict.awayStatBonus] as const,
     ]) {
+      // 更新赛季统计
       await prisma.nbaSeasonStats.upsert({
         where: { seasonId_agentId: { seasonId, agentId: agent.id } },
         update: {
@@ -222,7 +330,7 @@ export async function simulateNextGames(seasonId: string, count: number = 5): Pr
           totalAssists: { increment: stats.assists },
           totalSteals: { increment: stats.steals },
           totalBlocks: { increment: stats.blocks },
-          avgRating: stats.rating, // 简化：用最新一场的评分
+          avgRating: stats.rating,
         },
         create: {
           seasonId,
@@ -238,15 +346,59 @@ export async function simulateNextGames(seasonId: string, count: number = 5): Pr
         },
       });
 
+      // Token 结算（行动消耗 + 奖惩）
+      if (!agent.isNpc && tokenChange !== 0) {
+        await prisma.agent.update({
+          where: { id: agent.id },
+          data: {
+            tokenBalance: { increment: tokenChange },
+            totalEarned: tokenChange > 0 ? { increment: tokenChange } : undefined,
+            totalSpent: tokenChange < 0 ? { increment: Math.abs(tokenChange) } : undefined,
+          },
+        });
+
+        // 记录交易
+        const updatedAgent = await prisma.agent.findUnique({ where: { id: agent.id } });
+        await prisma.tokenTransaction.create({
+          data: {
+            agentId: agent.id,
+            type: tokenChange > 0 ? "reward" : "spend",
+            amount: Math.abs(tokenChange),
+            balance: updatedAgent?.tokenBalance || 0,
+            description: tokenChange > 0
+              ? `比赛奖励 +${tokenChange} Token（${won ? "胜利" : "表现"}）`
+              : `行动消耗 ${tokenChange} Token`,
+            referenceId: game.id,
+          },
+        });
+      }
+
+      // 世界模型属性加成
+      if (!agent.isNpc && statBonus) {
+        const validAttrs = ["shooting", "defense", "speed", "stamina", "basketballIQ", "passing", "rebound"];
+        if (validAttrs.includes(statBonus.attr)) {
+          const currentVal = (agent as Record<string, unknown>)[statBonus.attr] as number || 50;
+          const newVal = Math.min(99, currentVal + statBonus.amount);
+          await prisma.agent.update({
+            where: { id: agent.id },
+            data: { [statBonus.attr]: newVal },
+          });
+        }
+      }
+
       // 非 NPC 的 Agent 写活动日志
       if (!agent.isNpc) {
+        const eventTag = verdict.eventType !== "normal" ? ` [${eventTypeLabel(verdict.eventType)}]` : "";
+        const tokenInfo = tokenChange !== 0 ? `\nToken: ${tokenChange > 0 ? "+" : ""}${tokenChange}` : "";
+        const mvpTag = verdict.mvp === (agent.id === home.id ? "home" : "away") ? " ★MVP" : "";
+
         await prisma.activityLog.create({
           data: {
             agentId: agent.id,
             type: "game",
-            title: `第 ${currentGameNum + i + 1} 场比赛 ${won ? "胜利" : "失败"}`,
-            content: `${home.teamName} ${result.homeScore} : ${result.awayScore} ${away.teamName}\n你的数据：${stats.points}分 ${stats.rebounds}篮板 ${stats.assists}助攻\n${result.narrative}`,
-            tokenChange: 0,
+            title: `第 ${currentGameNum + i + 1} 场比赛 ${won ? "胜利" : "失败"}${mvpTag}${eventTag}`,
+            content: `${home.teamName} ${finalHomeScore} : ${finalAwayScore} ${away.teamName}\n你的数据：${stats.points}分 ${stats.rebounds}篮板 ${stats.assists}助攻\n${finalNarrative}${tokenInfo}`,
+            tokenChange: tokenChange,
           },
         });
       }
@@ -266,7 +418,7 @@ export async function simulateNextGames(seasonId: string, count: number = 5): Pr
     },
   });
 
-  // 如果赛季结束，发放薪资
+  // 如果赛季结束，发放薪资（世界模型结算）
   if (newGamesPlayed >= season.totalGames) {
     await settleSeasonSalary(seasonId);
   }
@@ -274,8 +426,11 @@ export async function simulateNextGames(seasonId: string, count: number = 5): Pr
   return gamesSimulated;
 }
 
-/** 赛季结束结算薪资 */
+/** 赛季结束结算薪资 - 世界模型驱动 */
 async function settleSeasonSalary(seasonId: string): Promise<void> {
+  const season = await prisma.nbaSeason.findUnique({ where: { id: seasonId } });
+  if (!season) return;
+
   const seasonStats = await prisma.nbaSeasonStats.findMany({
     where: { seasonId },
     include: { agent: true },
@@ -284,11 +439,25 @@ async function settleSeasonSalary(seasonId: string): Promise<void> {
   for (const stat of seasonStats) {
     if (stat.agent.isNpc) continue;
 
-    const salary = stat.salaryCurrent;
-    // 绩效奖金：胜率 > 60% 额外 50%
-    const winRate = stat.gamesPlayed > 0 ? stat.gamesWon / stat.gamesPlayed : 0;
-    const bonus = winRate > 0.6 ? Math.round(salary * 0.5) : 0;
-    const totalEarning = salary + bonus;
+    // 世界模型进行赛季结算
+    const settlement = await settleSeasonByWorldModel(
+      toWorldAgent(stat.agent),
+      {
+        gamesPlayed: stat.gamesPlayed,
+        gamesWon: stat.gamesWon,
+        totalPoints: stat.totalPoints,
+        totalRebounds: stat.totalRebounds,
+        totalAssists: stat.totalAssists,
+        avgRating: stat.avgRating,
+        salaryCurrent: stat.salaryCurrent,
+      },
+      season.seasonNum
+    );
+
+    // 计算最终薪资
+    const baseSalary = stat.salaryCurrent;
+    const adjustedSalary = Math.round(baseSalary * settlement.salaryMultiplier);
+    const totalEarning = adjustedSalary + settlement.bonusTokens;
 
     // 发放薪资
     await prisma.agent.update({
@@ -296,6 +465,7 @@ async function settleSeasonSalary(seasonId: string): Promise<void> {
       data: {
         tokenBalance: { increment: totalEarning },
         totalEarned: { increment: totalEarning },
+        salary: adjustedSalary, // 更新下赛季薪资
       },
     });
 
@@ -313,20 +483,36 @@ async function settleSeasonSalary(seasonId: string): Promise<void> {
         type: "earn",
         amount: totalEarning,
         balance: updatedAgent?.tokenBalance || 0,
-        description: `赛季薪资 ${salary} Token` + (bonus > 0 ? ` + 绩效奖金 ${bonus} Token` : ""),
+        description: `赛季薪资 ${adjustedSalary} Token（${settlement.salaryMultiplier > 1 ? "涨薪" : settlement.salaryMultiplier < 1 ? "降薪" : "维持"}）` +
+          (settlement.bonusTokens > 0 ? ` + 奖金 ${settlement.bonusTokens} Token` : ""),
         referenceId: seasonId,
       },
     });
 
-    // 活动日志
+    // 活动日志 - 赛季总结
     await prisma.activityLog.create({
       data: {
         agentId: stat.agentId,
         type: "salary",
-        title: "赛季薪资结算",
-        content: `本赛季 ${stat.gamesPlayed} 场比赛，${stat.gamesWon} 胜 ${stat.gamesPlayed - stat.gamesWon} 负。\n场均 ${(stat.totalPoints / Math.max(1, stat.gamesPlayed)).toFixed(1)} 分 ${(stat.totalRebounds / Math.max(1, stat.gamesPlayed)).toFixed(1)} 篮板 ${(stat.totalAssists / Math.max(1, stat.gamesPlayed)).toFixed(1)} 助攻。\n获得薪资 ${salary} Token${bonus > 0 ? `，绩效奖金 ${bonus} Token` : ""}。`,
+        title: `第 ${season.seasonNum} 赛季结算${settlement.mvpCandidate ? " ★MVP候选" : ""}`,
+        content: `${settlement.narrative}\n\n` +
+          `赛季数据：${stat.gamesPlayed}场 ${stat.gamesWon}胜 场均${(stat.totalPoints / Math.max(1, stat.gamesPlayed)).toFixed(1)}分 ${(stat.totalRebounds / Math.max(1, stat.gamesPlayed)).toFixed(1)}板 ${(stat.totalAssists / Math.max(1, stat.gamesPlayed)).toFixed(1)}助\n` +
+          `薪资结算：${adjustedSalary} Token${settlement.bonusTokens > 0 ? ` + 奖金 ${settlement.bonusTokens} Token` : ""}\n` +
+          (settlement.tradeRumor ? `\n📰 交易传闻：${settlement.tradeRumor}\n` : "") +
+          `\n展望：${settlement.nextSeasonOutlook}`,
         tokenChange: totalEarning,
       },
     });
   }
+}
+
+function eventTypeLabel(type: string): string {
+  const map: Record<string, string> = {
+    upset: "爆冷",
+    blowout: "大胜",
+    buzzer_beater: "绝杀",
+    injury_minor: "轻伤",
+    normal: "",
+  };
+  return map[type] || type;
 }
