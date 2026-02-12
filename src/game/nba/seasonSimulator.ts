@@ -29,29 +29,39 @@ async function ensureNpcAgents(): Promise<void> {
 
   if (needed <= 0) return;
 
-  const npcs = [];
+  // 逐个创建 NPC（因为 SQLite 不支持 createMany）
   for (let i = 0; i < needed; i++) {
     const position = POSITIONS[i % 5];
     const teamIndex = Math.floor(i / 5) % NBA_TEAMS.length;
     const attrs = generateNpcAttributes(position);
+    const npcId = `npc_${Date.now()}_${i}`;
 
-    npcs.push({
-      nickname: generateNpcName(),
-      userId: `npc_${Date.now()}_${i}`,
-      isNpc: true,
-      position,
-      teamName: NBA_TEAMS[teamIndex],
-      ...attrs,
-      luckValue: Math.round(30 + Math.random() * 40),
-      cognitiveScore: Math.round(40 + Math.random() * 30),
-      tokenBalance: 500,
-      bio: "NPC 球员",
+    // 先创建 NPC 对应的 User 记录（满足外键约束）
+    await prisma.user.create({
+      data: {
+        secondmeUserId: npcId,
+        name: generateNpcName(),
+        accessToken: "npc",
+      },
     });
-  }
 
-  // 逐个创建 NPC（因为 SQLite 不支持 createMany）
-  for (const npc of npcs) {
-    await prisma.agent.create({ data: npc });
+    const npcUser = await prisma.user.findUnique({ where: { secondmeUserId: npcId } });
+    if (!npcUser) continue;
+
+    await prisma.agent.create({
+      data: {
+        nickname: npcUser.name || generateNpcName(),
+        userId: npcUser.id,
+        isNpc: true,
+        position,
+        teamName: NBA_TEAMS[teamIndex],
+        ...attrs,
+        luckValue: Math.round(30 + Math.random() * 40),
+        cognitiveScore: Math.round(40 + Math.random() * 30),
+        tokenBalance: 500,
+        bio: "NPC 球员",
+      },
+    });
   }
 }
 

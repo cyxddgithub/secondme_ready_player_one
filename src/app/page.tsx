@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import LoginButton from "@/components/LoginButton";
@@ -7,6 +8,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
   const params = await searchParams;
   const user = await getCurrentUser();
   const agent = user ? await prisma.agent.findUnique({ where: { userId: user.id } }) : null;
+
+  // 已登录且已创建 Agent 的用户直接跳转到生涯页
+  if (user && agent && !params.error) {
+    redirect("/agent/career");
+  }
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8">
