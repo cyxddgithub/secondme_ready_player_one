@@ -3,12 +3,26 @@ import { prisma } from "@/lib/prisma";
 import LoginButton from "@/components/LoginButton";
 import UserInfoCard from "@/components/UserInfoCard";
 
-export default async function Home() {
+export default async function Home({ searchParams }: { searchParams: Promise<{ error?: string; detail?: string }> }) {
+  const params = await searchParams;
   const user = await getCurrentUser();
   const agent = user ? await prisma.agent.findUnique({ where: { userId: user.id } }) : null;
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8">
+      {/* 登录错误提示 */}
+      {params.error && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-red-50 border border-red-200 rounded-xl px-6 py-3 shadow-lg z-50 max-w-md">
+          <p className="text-sm text-red-700 font-medium">登录失败</p>
+          <p className="text-xs text-red-500 mt-1">
+            {params.error === "token_exchange_failed" ? `Token 交换失败${params.detail ? `：${params.detail}` : ""}` :
+             params.error === "user_info_failed" ? "获取用户信息失败" :
+             params.error === "no_code" ? "未收到授权码" :
+             `认证出错 (${params.error})`}
+          </p>
+        </div>
+      )}
+
       {/* Hero Section */}
       <div className="text-center max-w-3xl mx-auto">
         <h1 className="text-6xl font-bold tracking-tight mb-4">

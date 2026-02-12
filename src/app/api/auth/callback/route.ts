@@ -16,8 +16,10 @@ export async function GET(request: NextRequest) {
     const tokenResult = await exchangeCodeForToken(code);
 
     if (tokenResult.code !== 0 || !tokenResult.data) {
-      console.error("Token exchange failed:", tokenResult);
-      return NextResponse.redirect(new URL("/?error=token_exchange_failed", request.url));
+      console.error("Token exchange failed:", JSON.stringify(tokenResult));
+      // 将详细错误信息传递到前端方便调试
+      const errMsg = tokenResult.detail || tokenResult.message || "unknown";
+      return NextResponse.redirect(new URL(`/?error=token_exchange_failed&detail=${encodeURIComponent(errMsg)}`, request.url));
     }
 
     const { access_token, refresh_token, expires_in } = tokenResult.data;
