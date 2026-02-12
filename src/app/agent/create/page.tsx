@@ -27,13 +27,20 @@ export default function CreateAgentPage() {
   const [error, setError] = useState("");
   const [authChecking, setAuthChecking] = useState(true);
 
-  // 页面加载时检查登录状态
+  // 页面加载时检查登录状态和是否已有 Agent
   useEffect(() => {
     async function checkAuth() {
       try {
         const res = await fetch("/api/auth/me");
         if (res.status === 401) {
           router.replace("/api/auth/login");
+          return;
+        }
+        // 检查是否已有 Agent，已有则直接跳转生涯页
+        const agentRes = await fetch("/api/agent/status");
+        const agentData = await agentRes.json();
+        if (agentData.code === 0) {
+          router.replace("/agent/career");
           return;
         }
       } catch {

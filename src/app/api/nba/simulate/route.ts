@@ -31,7 +31,13 @@ export async function POST() {
   }
 
   // 模拟 5 场比赛
-  const gamesSimulated = await simulateNextGames(season.id, 5);
+  let gamesSimulated: number;
+  try {
+    gamesSimulated = await simulateNextGames(season.id, 5);
+  } catch (simError) {
+    console.error("比赛模拟出错:", simError);
+    return NextResponse.json({ code: 500, message: "比赛模拟出错，请重试" }, { status: 500 });
+  }
 
   // 重新获取赛季状态
   const updatedSeason = await prisma.nbaSeason.findUnique({ where: { id: season.id } });

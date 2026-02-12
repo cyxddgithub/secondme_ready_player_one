@@ -125,9 +125,12 @@ export default function CareerPage() {
       if (data.code === 0) {
         setSimResult(`模拟了 ${data.data.gamesSimulated} 场比赛（${data.data.gamesPlayed}/${data.data.totalGames}）${data.data.status === "completed" ? " 赛季结束！" : ""}`);
         await loadData();
+      } else {
+        setSimResult(`模拟失败：${data.message || "未知错误"}`);
       }
     } catch (err) {
       console.error("模拟失败:", err);
+      setSimResult("模拟失败：网络错误，请重试");
     } finally {
       setSimulating(false);
     }
@@ -277,7 +280,7 @@ export default function CareerPage() {
             {simulating ? "模拟比赛中..." : "模拟比赛（5场）"}
           </button>
           {simResult && (
-            <span className="text-sm text-green-600 bg-green-50 px-3 py-1.5 rounded-full">{simResult}</span>
+            <span className={`text-sm px-3 py-1.5 rounded-full ${simResult.startsWith("模拟失败") ? "text-red-600 bg-red-50" : "text-green-600 bg-green-50"}`}>{simResult}</span>
           )}
         </div>
 
