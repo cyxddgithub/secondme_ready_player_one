@@ -36,8 +36,8 @@ SECONDME_OAUTH_URL=https://go.second.me/oauth/
 SECONDME_TOKEN_ENDPOINT=https://app.mindos.com/gate/lab/api/oauth/token/code
 SECONDME_REFRESH_TOKEN_ENDPOINT=https://app.mindos.com/gate/lab/api/oauth/token/refresh
 
-# 数据库
-DATABASE_URL="file:./dev.db"
+# 数据库（PostgreSQL - Vercel 部署请使用 Neon 等云数据库）
+DATABASE_URL="${DATABASE_URL:-postgresql://localhost:5432/readyplayerone}"
 EOF
 
 echo ">>> .env.local 已生成"
