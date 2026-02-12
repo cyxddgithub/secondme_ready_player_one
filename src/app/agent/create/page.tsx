@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { COGNITIVE_QUESTIONS } from "@/game/nba/nbaEngine";
 
@@ -24,6 +24,27 @@ export default function CreateAgentPage() {
   const [isRolling, setIsRolling] = useState(false);
   const [creating, setCreating] = useState(false);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  const [error, setError] = useState("");
+  const [authChecking, setAuthChecking] = useState(true);
+
+  // 页面加载时检查登录状态
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (res.status === 401) {
+          router.replace("/api/auth/login");
+          return;
+        }
+      } catch {
+        // 网络错误时也跳转到登录
+        router.replace("/api/auth/login");
+        return;
+      }
+      setAuthChecking(false);
+    }
+    checkAuth();
+  }, [router]);
 
   const positions = [
     { key: "PG", name: "控球后卫", desc: "速度快、传球好、掌控节奏", icon: "⚡" },
@@ -76,6 +97,7 @@ export default function CreateAgentPage() {
 
   async function createAgent() {
     setCreating(true);
+    setError("");
     try {
       const res = await fetch("/api/agent/create", {
         method: "POST",
@@ -93,17 +115,38 @@ export default function CreateAgentPage() {
       if (data.code === 0) {
         setResult(data.data);
         setStep("result");
+      } else if (res.status === 401) {
+        // 登录过期，跳转重新登录
+        setError("登录已过期，正在跳转重新登录...");
+        setTimeout(() => router.replace("/api/auth/login"), 1500);
+      } else {
+        setError(data.message || "创建失败，请重试");
       }
     } catch (err) {
       console.error("创建失败:", err);
+      setError("网络错误，请检查网络后重试");
     } finally {
       setCreating(false);
     }
   }
 
+  if (authChecking) {
+    return (
+      <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <p className="text-gray-500">加载中...</p>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
+        {/* 错误提示 */}
+        {error && (
+          <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+            <p className="text-red-700 text-sm">{error}</p>
+          </div>
+        )}
         {/* 进度指示器 */}
         <div className="flex items-center justify-center gap-2 mb-8">
           {(["vision", "position", "cognitive", "luck", "result"] as Step[]).map((s, i) => (

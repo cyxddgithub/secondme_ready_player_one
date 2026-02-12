@@ -6,7 +6,10 @@ import { generateAttributes, calculateOVR, calculateSalary, NBA_TEAMS } from "@/
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
-    return NextResponse.json({ code: 401, message: "未登录" }, { status: 401 });
+    return NextResponse.json(
+      { code: 401, message: "登录已过期，请重新登录" },
+      { status: 401 }
+    );
   }
 
   // 检查是否已有 Agent
